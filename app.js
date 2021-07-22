@@ -7,6 +7,8 @@ const hbs = require("hbs");
 const bcrypt = require("bcryptjs");
 const Register = require("./models/registers");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const auth = require("./middleware/auth");
 const port = process.env.PORT || 3000;
 
 const static_path = path.join(__dirname, "./public");
@@ -14,6 +16,7 @@ const template_path = path.join(__dirname, "./templates/views");
 const partials_path = path.join(__dirname, "./templates/partials");
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: false }));
 
 app.use(express.static(static_path));
@@ -24,6 +27,21 @@ hbs.registerPartials(partials_path);
 app.get("/", (req, res) => {
     res.render("index")
 });
+
+app.get("/event", auth, (req, res) => {
+    res.render("event")
+});
+
+app.get("/logout", auth, async(req, res) => {
+    try {
+        res.clearCookie("jwt");
+        console.log("Logged out succesfully");
+        await req.user.save();
+        res.render("login");
+    } catch (error) {
+        res.status(500).send(error);
+    }
+})
 
 //create a new user
 app.get("/register", (req, res) => {
@@ -50,8 +68,14 @@ app.post("/register", async(req, res) => {
             console.log("the success part :" + registerUser);
             const token = await registerUser.generateAuthToken();
 
+            res.cookie("jwt", token, {
+                expires: new Date(Date.now() + 500000),
+                httpOnly: true
+            });
+
             const registered = await registerUser.save();
-            res.status(201).render("index");
+
+            res.status(201).render("login");
 
         } else {
             res.send("password are not matching");
@@ -73,6 +97,13 @@ app.post("/login", async(req, res) => {
 
         const token = await useremail.generateAuthToken();
         console.log("the token part" + token);
+
+        res.cookie("jwt", token, {
+            expires: new Date(Date.now() + 500000),
+            httpOnly: true
+                // secure:true
+        });
+
 
         if (isMatch) {
             res.status(201).render("index");
